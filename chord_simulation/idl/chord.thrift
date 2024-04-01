@@ -7,6 +7,7 @@ service ChordNode {
     void join(1: Node node),
     void notify(1: Node node),
     Node get_predecessor(),
+    DataShard get_data_shard(1: i32 id),
 }
 
 enum KVStatus {
@@ -27,3 +28,12 @@ struct Node {
     4: bool valid,
 }
 
+struct Data {
+    1: string key,
+    2: string value,
+    3: KVStatus status,
+}
+
+struct DataShard {
+    1: list<Data> data,
+}

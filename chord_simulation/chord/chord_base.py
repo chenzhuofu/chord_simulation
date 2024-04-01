@@ -4,7 +4,7 @@ import os
 import threading
 import traceback
 from thriftpy2.rpc import make_client
-from .struct_class import KeyValueResult, Node, M
+from .struct_class import KeyValueResult, Node, M, Data, DataShard
 from loguru import logger
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -72,6 +72,9 @@ class BaseChordNode:
 
         self.__timer = threading.Timer(self._interval, self.run_periodically)
         self.__timer.start()
+        
+    def get_data_shard(self, id: int) -> DataShard:
+        raise NotImplementedError
 
 
 def hash_func(intput_str) -> int:

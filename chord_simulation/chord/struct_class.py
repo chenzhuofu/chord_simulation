@@ -23,3 +23,12 @@ class KeyValueResult(chord_thrift.KeyValueResult):
 class Node(chord_thrift.Node):
     def __init__(self, node_id: int, address: str, port: int, valid: bool = True):
         super().__init__(node_id, address, port, valid)
+        
+
+class Data(chord_thrift.Data):
+    def __init__(self, key: str, value: str, status: KVStatus = KVStatus.VALID):
+        super().__init__(key, value, status)
+        
+class DataShard(chord_thrift.DataShard):
+    def __init__(self, data: list[Data]):
+        super().__init__(data)

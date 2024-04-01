@@ -28,7 +28,17 @@ def build_chord_ring_for_basic_query():
 
 
 def build_chord_ring_for_finger_table():
-    raise ValueError("not implement yet")
+    node1 = Node(hash_func('localhost:50001'), 'localhost', 50001)
+    node2 = Node(hash_func('localhost:50002'), 'localhost', 50002)
+    node3 = Node(hash_func('localhost:50003'), 'localhost', 50003)
+
+    conn_node2 = connect_node(node2)
+    conn_node3 = connect_node(node3)
+
+    logger.info("build chord ring...")
+    conn_node3.join(node1)
+    conn_node2.join(node1)
+    time.sleep(10)
 
 
 def init_data_content(client):
@@ -45,8 +55,8 @@ def cmd_interaction(client: Client):
     if len(params[0]) == 0:
         return
 
-    if params[0] not in ['put', 'get']:
-        print("> only support two operation: put/get")
+    if params[0] not in ['put', 'get', 'join']:
+        print("> only support three operation: put/get/join")
         return
 
     if params[0] == 'put' and len(params) == 3:
@@ -60,6 +70,12 @@ def cmd_interaction(client: Client):
         h = hash_func(key)
         print(f'> hash func({key}) == {h}, find key in server-{node_id}, get status is {status}.')
         print(f'> get result: key: {key}, value: {value}')
+    elif params[0] == 'join' and len(params) == 1:
+        node1 = Node(hash_func('localhost:50001'), 'localhost', 50001)
+        node4 = Node(hash_func('localhost:50004'), 'localhost', 50004)
+        conn_node4 = connect_node(node4)
+        conn_node4.join(node1)
+        time.sleep(5)
     else:
         print(f'> no support operation format')
 
@@ -73,7 +89,7 @@ def main():
 
     client = Client("localhost", 50001)
     init_data_content(client)
-    print("operation format：[ put <key> <value> | get <key> ]")
+    print("operation format：[ put <key> <value> | get <key> | join ]")
     while True:
         try:
             cmd_interaction(client)
