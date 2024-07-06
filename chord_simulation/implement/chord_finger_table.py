@@ -103,6 +103,8 @@ class ChordNode(BaseChordNode):
     def _stabilize(self):
         conn_successor = connect_node(self.finger_table[0])
         x = conn_successor.get_predecessor()
+        if x is None:
+            return
         if is_between(x, self.self_node, self.finger_table[0]):
             self.finger_table[0] = x
         conn_successor = connect_node(self.finger_table[0])
