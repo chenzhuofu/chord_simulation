@@ -33,8 +33,13 @@ class ChordNode(BaseChordNode):
         if is_between(tmp_key_node, self.self_node, self.finger_table[0]):
             return self.finger_table[0]
         else:
-            next_node = self._closet_preceding_node(key_id)
-            conn_next_node = connect_node(next_node)
+            try:
+                next_node = self._closet_preceding_node(key_id)
+                conn_next_node = connect_node(next_node)
+            except Exception as e:
+                if e == "Timeout":
+                    next_node = self.find_successor(next_node.node_id - 1)
+                    conn_next_node = connect_node(next_node)
             return conn_next_node.find_successor(key_id)
     
     def _closet_preceding_node(self, key_id: int) -> Node:
@@ -52,7 +57,13 @@ class ChordNode(BaseChordNode):
         else:
             node = self.find_successor(key_id)
             conn_node = connect_node(node)
-            return conn_node.lookup(key)
+            retry = 3
+            while retry > 0:
+                result = conn_node.lookup(key)
+                if result.status == KVStatus.VALID:
+                    return result
+                retry -= 1
+            return KeyValueResult(key, "", self.node_id, KVStatus.NOT_FOUND)
     
     def _lookup_local(self, key: str) -> KeyValueResult:
         result = self.kv_store.get(key, None)
