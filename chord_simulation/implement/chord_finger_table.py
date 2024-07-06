@@ -1,6 +1,6 @@
 from ..chord.chord_base import BaseChordNode
 from ..chord.chord_base import connect_node, hash_func, is_between
-from ..chord.struct_class import KeyValueResult, Node, KVStatus, M, Data, DataShard
+from ..chord.struct_class import KeyValueResult, Node, KVStatus, M, R, Data, DataShard, Replica, Successors
 
 # finger_table Chord implementation
 class ChordNode(BaseChordNode):
@@ -15,6 +15,9 @@ class ChordNode(BaseChordNode):
         self.predecessor = Node(self.node_id, address, port, valid=False)
         self.finger_table = [Node(self.node_id, address, port) for _ in range(M)]
         self.next = 0
+        
+        self.replicas = [Replica(-1, []) for _ in range(R - 1)]
+        self.successors = [Node(self.node_id, address, port) for _ in range(R - 1)]
         
         self.logger.info(f'node {self.node_id} listening at {address}:{port}')
 
@@ -36,11 +39,10 @@ class ChordNode(BaseChordNode):
             try:
                 next_node = self._closet_preceding_node(key_id)
                 conn_next_node = connect_node(next_node)
+                return conn_next_node.find_successor(key_id)
             except Exception as e:
-                if e == "Timeout":
-                    next_node = self.find_successor(next_node.node_id - 1)
-                    conn_next_node = connect_node(next_node)
-            return conn_next_node.find_successor(key_id)
+                self.logger.info(f"find_successor failed, wait finger_table to repair: {e}")
+                return self.finger_table[0]
     
     def _closet_preceding_node(self, key_id: int) -> Node:
         tmp_key_node = Node(( key_id - 1 + 2 ** M ) % (2 ** M), "", 0)
@@ -82,6 +84,8 @@ class ChordNode(BaseChordNode):
         
     def __do_put(self, key: str, value: str) -> KeyValueResult:
         self.kv_store[key] = value
+        conn_successor = connect_node(self.finger_table[0])
+        conn_successor.put_in_replica(1, key, value, self.node_id)
         return KeyValueResult(key, value, self.node_id)
     
     def join(self, node: Node):
@@ -101,14 +105,28 @@ class ChordNode(BaseChordNode):
             self.predecessor = self.self_node
             
     def _stabilize(self):
-        conn_successor = connect_node(self.finger_table[0])
-        x = conn_successor.get_predecessor()
+        try:
+            conn_successor = connect_node(self.finger_table[0])
+            x = conn_successor.get_predecessor()
+        except Exception as e:
+            for i in range(R - 1):
+                try:
+                    conn_successor = connect_node(self.successors[i])
+                    x = conn_successor.get_predecessor()
+                    self.finger_table[0] = self.successors[i]
+                    break
+                except Exception as e:
+                    continue
         if x is None:
             return
         if is_between(x, self.self_node, self.finger_table[0]):
             self.finger_table[0] = x
-        conn_successor = connect_node(self.finger_table[0])
-        conn_successor.notify(self.self_node)
+        try:
+            conn_successor = connect_node(self.finger_table[0])
+            conn_successor.notify(self.self_node)
+        except Exception as e:
+            self.logger.info(f"stabilize failed, wait finger_table to repair: {e}")
+            return
         
     def notify(self, node: Node):
         if not self.predecessor.valid or is_between(node, self.predecessor, self.self_node):
@@ -127,6 +145,9 @@ class ChordNode(BaseChordNode):
             conn_predecessor.find_successor(self.node_id)
         except:
             self.predecessor = Node(self.node_id, self.address, self.port, valid=False)
+            for data in self.replicas[0].data:
+                self.kv_store[data.key] = data.value
+            self.successors = [Node(self.node_id, self.address, self.port) for _ in range(R - 1)]
             
     def get_predecessor(self) -> Node:
         return self.predecessor
@@ -140,3 +161,50 @@ class ChordNode(BaseChordNode):
             self.kv_store.pop(data.key)
         data_shard.append(Data("", "", KVStatus.NOT_FOUND))
         return DataShard(data_shard)
+    
+    def put_in_replica(self, step: int, key: str, value: str, node_id: int):
+        if self.node_id == node_id:
+            return
+        self.replicas[step - 1].data.append(Data(key, value))
+        step = step + 1
+        if step < R:
+            conn_node = connect_node(self.finger_table[0])
+            conn_node.put_in_replica(step, key, value, node_id)
+    
+    def _check_replicas(self):
+        try:
+            conn_node = connect_node(self.finger_table[0])
+            new_successors = conn_node.get_successors().successors
+        except Exception as e:
+            self.logger.info(f"check_replicas failed, wait finger_table to repair: {e}")
+            return
+        new_successors = [self.finger_table[0]] + new_successors[:R - 2]
+        for i in range(R - 1):
+            if new_successors[i] != self.successors[i]:
+                try:
+                    data = [ Data(k, v) for k, v in self.kv_store.items() ]
+                    conn_node = connect_node(self.finger_table[0])
+                    status = conn_node.update_replica(1, Replica(self.node_id, data))
+                    if status == KVStatus.VALID:
+                        self.successors = new_successors
+                except Exception as e:
+                    self.logger.info(f"check_replicas failed, wait finger_table to repair: {e}")
+                    return
+                break
+    
+    def update_replica(self, step: int, replica: Replica) -> KVStatus:
+        if self.node_id == replica.node_id:
+            return KVStatus.VALID
+        self.replicas[step - 1] = replica
+        step = step + 1
+        if step < R:
+            try:
+                conn_node = connect_node(self.finger_table[0])
+                conn_node.update_replica(step, replica)
+            except Exception as e:
+                self.logger.info(f"update_replica failed, wait finger_table to repair: {e}")
+                return KVStatus.NOT_FOUND
+        return KVStatus.VALID
+
+    def get_successors(self) -> Successors:
+        return Successors(self.successors)

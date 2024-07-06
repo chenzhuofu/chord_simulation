@@ -8,6 +8,9 @@ service ChordNode {
     void notify(1: Node node),
     Node get_predecessor(),
     DataShard get_data_shard(1: i32 id),
+    void put_in_replica(1: i32 step, 2: string key, 3: string value, 4: i32 node_id),
+    KVStatus update_replica(1: i32 step, 2: Replica replica),
+    Successors get_successors(),
 }
 
 enum KVStatus {
@@ -36,4 +39,13 @@ struct Data {
 
 struct DataShard {
     1: list<Data> data,
+}
+
+struct Replica {
+    1: i32 node_id,
+    2: list<Data> data,
+}
+
+struct Successors {
+    1: list<Node> successors,
 }

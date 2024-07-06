@@ -4,7 +4,7 @@ import os
 import threading
 import traceback
 from thriftpy2.rpc import make_client
-from .struct_class import KeyValueResult, Node, M, Data, DataShard
+from .struct_class import KeyValueResult, Node, M, Data, DataShard, Replica, Successors, KVStatus
 from loguru import logger
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -59,12 +59,16 @@ class BaseChordNode:
 
     def _log_self(self):
         raise NotImplementedError
+    
+    def _check_replicas(self):
+        raise NotImplementedError
 
     def run_periodically(self):
         try:
             self._stabilize()
             self._fix_fingers()
             self._check_predecessor()
+            self._check_replicas()
             self._log_self()
         except Exception as e:
             self.logger.warning(e)
@@ -74,6 +78,15 @@ class BaseChordNode:
         self.__timer.start()
         
     def get_data_shard(self, id: int) -> DataShard:
+        raise NotImplementedError
+    
+    def put_in_replica(self, step: int, key: str, value: str, node_id: int):
+        raise NotImplementedError
+    
+    def update_replica(self, step: int, replica: Replica) -> KVStatus:
+        raise NotImplementedError
+    
+    def get_successors(self) -> Successors:
         raise NotImplementedError
 
 

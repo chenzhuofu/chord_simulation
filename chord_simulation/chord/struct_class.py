@@ -4,6 +4,7 @@ import thriftpy2
 import os
 
 M = 16
+R = 3
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 thrift_path = os.path.join(current_dir, '../idl/chord.thrift')
@@ -32,3 +33,11 @@ class Data(chord_thrift.Data):
 class DataShard(chord_thrift.DataShard):
     def __init__(self, data: list[Data]):
         super().__init__(data)
+
+class Replica(chord_thrift.Replica):
+    def __init__(self, node_id: int, data: list[Data]):
+        super().__init__(node_id, data)
+
+class Successors(chord_thrift.Successors):
+    def __init__(self, successors: list[Node]):
+        super().__init__(successors)
